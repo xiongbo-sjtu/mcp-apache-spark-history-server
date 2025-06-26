@@ -1,0 +1,10 @@
+servers:
+  my-server:
+    default: true
+    url: "http://localhost:18080"
+    auth:
+      username: user
+      password: password
+      token: token
+
+# spark-988f126664e3473ebd004d8de4344137

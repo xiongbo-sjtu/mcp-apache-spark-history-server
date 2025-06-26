@@ -1,0 +1,581 @@
+import requests
+from typing import Dict, List, Optional, Any, Type, TypeVar
+from urllib.parse import urljoin
+from pydantic import BaseModel
+
+from spark_types import (
+    ApplicationInfo,
+    ApplicationAttemptInfo,
+    JobData,
+    ExecutorSummary,
+    StageData,
+    TaskData,
+    RDDStorageInfo,
+    ApplicationEnvironmentInfo,
+    ThreadStackTrace,
+    VersionInfo,
+    JobExecutionStatus,
+    StageStatus,
+    TaskStatus,
+    ProcessSummary,
+    TaskMetricDistributions,
+    ExecutionData,
+)
+from config import ServerConfig
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class SparkRestClient:
+    """
+    Python client for the Spark REST API.
+    """
+
+    def __init__(self, sever_config: ServerConfig):
+        """
+        Initialize the Spark REST client.
+
+        Args:
+            config: Configuration object
+            config_path: Path to configuration file
+        """
+
+        self.config = sever_config
+        self.base_url = self.config.url.rstrip("/") + "/api/v1"
+        self.auth = None
+
+        # Set up authentication if provided
+        if self.config.auth:
+            if self.config.auth.username and self.config.auth.password:
+                self.auth = (self.config.auth.username, self.config.auth.password)
+
+    def _get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        """
+        Make a GET request to the Spark REST API.
+
+        Args:
+            endpoint: The API endpoint to call
+            params: Optional query parameters
+
+        Returns:
+            The JSON response from the API
+        """
+        url = urljoin(self.base_url + "/", endpoint.lstrip("/"))
+        headers = {"Accept": "application/json"}
+
+        # Add token to headers if provided
+        if self.config.auth and self.config.auth.token:
+            headers["Authorization"] = f"Bearer {self.config.auth.token}"
+
+        response = requests.get(url, params=params, headers=headers, auth=self.auth)
+        response.raise_for_status()
+        return response.json()
+
+    def _parse_model(self, data: Dict[str, Any], model_class: Type[T]) -> T:
+        """
+        Parse JSON data into a Pydantic model.
+
+        Args:
+            data: The JSON data to parse
+            model_class: The Pydantic model class to use
+
+        Returns:
+            An instance of the model class
+        """
+        return model_class.model_validate(data)
+
+    def _parse_model_list(
+        self, data: List[Dict[str, Any]], model_class: Type[T]
+    ) -> List[T]:
+        """
+        Parse a list of JSON data into a list of Pydantic models.
+
+        Args:
+            data: The list of JSON data to parse
+            model_class: The Pydantic model class to use
+
+        Returns:
+            A list of instances of the model class
+        """
+        return [self._parse_model(item, model_class) for item in data]
+
+    def get_version(self) -> VersionInfo:
+        """Get the Spark version."""
+        data = self._get("version")
+        return self._parse_model(data, VersionInfo)
+
+    def get_applications(
+        self,
+        status: Optional[List[str]] = None,
+        min_date: Optional[str] = None,
+        max_date: Optional[str] = None,
+        min_end_date: Optional[str] = None,
+        max_end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[ApplicationInfo]:
+        """
+        Get a list of all applications.
+
+        Args:
+            status: Filter by application status (COMPLETED, RUNNING)
+            min_date: Minimum start date (yyyy-MM-dd'T'HH:mm:ss.SSSz or yyyy-MM-dd)
+            max_date: Maximum start date
+            min_end_date: Minimum end date
+            max_end_date: Maximum end date
+            limit: Maximum number of applications to return
+
+        Returns:
+            List of ApplicationInfo objects
+        """
+        params = {}
+        if status:
+            params["status"] = status
+        if min_date:
+            params["minDate"] = min_date
+        if max_date:
+            params["maxDate"] = max_date
+        if min_end_date:
+            params["minEndDate"] = min_end_date
+        if max_end_date:
+            params["maxEndDate"] = max_end_date
+        if limit:
+            params["limit"] = limit
+
+        data = self._get("applications", params)
+        return self._parse_model_list(data, ApplicationInfo)
+
+    def get_application(self, app_id: str) -> ApplicationInfo:
+        """
+        Get information about a specific application.
+
+        Args:
+            app_id: The application ID
+
+        Returns:
+            ApplicationInfo object
+        """
+        data = self._get(f"applications/{app_id}")
+        return self._parse_model(data, ApplicationInfo)
+
+    def get_application_attempt(
+        self, app_id: str, attempt_id: str
+    ) -> ApplicationAttemptInfo:
+        """
+        Get information about a specific application attempt.
+
+        Args:
+            app_id: The application ID
+            attempt_id: The attempt ID
+
+        Returns:
+            ApplicationAttemptInfo object
+        """
+        data = self._get(f"applications/{app_id}/{attempt_id}")
+        return self._parse_model(data, ApplicationAttemptInfo)
+
+    def get_jobs(
+        self, app_id: str, status: Optional[List[JobExecutionStatus]] = None
+    ) -> List[JobData]:
+        """
+        Get a list of all jobs for an application.
+
+        Args:
+            app_id: The application ID
+            status: Filter by job status
+
+        Returns:
+            List of JobData objects
+        """
+        params = {}
+        if status:
+            params["status"] = [s.value for s in status]
+
+        data = self._get(f"applications/{app_id}/jobs", params)
+        return self._parse_model_list(data, JobData)
+
+    def get_job(self, app_id: str, job_id: int) -> JobData:
+        """
+        Get information about a specific job.
+
+        Args:
+            app_id: The application ID
+            job_id: The job ID
+
+        Returns:
+            JobData object
+        """
+        data = self._get(f"applications/{app_id}/jobs/{job_id}")
+        return self._parse_model(data, JobData)
+
+    def get_stages(
+        self,
+        app_id: str,
+        status: Optional[List[StageStatus]] = None,
+        details: bool = False,
+        with_summaries: bool = False,
+        quantiles: str = "0.0,0.25,0.5,0.75,1.0",
+        task_status: Optional[List[TaskStatus]] = None,
+    ) -> List[StageData]:
+        """
+        Get a list of all stages for an application.
+
+        Args:
+            app_id: The application ID
+            status: Filter by stage status
+            details: Whether to include task details
+            with_summaries: Whether to include summary metrics
+            quantiles: Comma-separated list of quantiles to use for summary metrics
+            task_status: Filter by task status
+
+        Returns:
+            List of StageData objects
+        """
+        params = {
+            "details": str(details).lower(),
+            "withSummaries": str(with_summaries).lower(),
+            "quantiles": quantiles,
+        }
+
+        if status:
+            params["status"] = [s.value for s in status]
+        if task_status:
+            params["taskStatus"] = [s.value for s in task_status]
+
+        data = self._get(f"applications/{app_id}/stages", params)
+        return self._parse_model_list(data, StageData)
+
+    def get_stage(
+        self,
+        app_id: str,
+        stage_id: int,
+        details: bool = True,
+        task_status: Optional[List[TaskStatus]] = None,
+        with_summaries: bool = False,
+        quantiles: str = "0.0,0.25,0.5,0.75,1.0",
+    ) -> List[StageData]:
+        """
+        Get information about a specific stage.
+
+        Args:
+            app_id: The application ID
+            stage_id: The stage ID
+            details: Whether to include task details
+            task_status: Filter by task status
+            with_summaries: Whether to include summary metrics
+            quantiles: Comma-separated list of quantiles to use for summary metrics
+
+        Returns:
+            List of StageData objects (one per attempt)
+        """
+        params = {
+            "details": str(details).lower(),
+            "withSummaries": str(with_summaries).lower(),
+            "quantiles": quantiles,
+        }
+
+        if task_status:
+            params["taskStatus"] = [s.value for s in task_status]
+
+        data = self._get(f"applications/{app_id}/stages/{stage_id}", params)
+        return self._parse_model_list(data, StageData)
+
+    def get_stage_attempt(
+        self,
+        app_id: str,
+        stage_id: int,
+        attempt_id: int,
+        details: bool = True,
+        task_status: Optional[List[TaskStatus]] = None,
+        with_summaries: bool = False,
+        quantiles: str = "0.0,0.25,0.5,0.75,1.0",
+    ) -> StageData:
+        """
+        Get information about a specific stage attempt.
+
+        Args:
+            app_id: The application ID
+            stage_id: The stage ID
+            attempt_id: The attempt ID
+            details: Whether to include task details
+            task_status: Filter by task status
+            with_summaries: Whether to include summary metrics
+            quantiles: Comma-separated list of quantiles to use for summary metrics
+
+        Returns:
+            StageData object
+        """
+        params = {
+            "details": str(details).lower(),
+            "withSummaries": str(with_summaries).lower(),
+            "quantiles": quantiles,
+        }
+
+        if task_status:
+            params["taskStatus"] = [s.value for s in task_status]
+
+        data = self._get(
+            f"applications/{app_id}/stages/{stage_id}/{attempt_id}", params
+        )
+        return self._parse_model(data, StageData)
+
+    def get_stage_task_summary(
+        self,
+        app_id: str,
+        stage_id: int,
+        attempt_id: int,
+        quantiles: str = "0.05,0.25,0.5,0.75,0.95",
+    ) -> TaskMetricDistributions:
+        """
+        Get task summary metrics for a specific stage attempt.
+
+        Args:
+            app_id: The application ID
+            stage_id: The stage ID
+            attempt_id: The attempt ID
+            quantiles: Comma-separated list of quantiles to use for summary metrics
+
+        Returns:
+            TaskMetricDistributions object
+        """
+        params = {"quantiles": quantiles}
+        data = self._get(
+            f"applications/{app_id}/stages/{stage_id}/{attempt_id}/taskSummary", params
+        )
+        return self._parse_model(data, TaskMetricDistributions)
+
+    def get_stage_tasks(
+        self,
+        app_id: str,
+        stage_id: int,
+        attempt_id: int,
+        offset: int = 0,
+        length: int = 20,
+        sort_by: str = "ID",
+        status: Optional[List[TaskStatus]] = None,
+    ) -> List[TaskData]:
+        """
+        Get tasks for a specific stage attempt.
+
+        Args:
+            app_id: The application ID
+            stage_id: The stage ID
+            attempt_id: The attempt ID
+            offset: Pagination offset
+            length: Number of tasks to return
+            sort_by: Field to sort by
+            status: Filter by task status
+
+        Returns:
+            List of TaskData objects
+        """
+        params = {"offset": offset, "length": length, "sortBy": sort_by}
+
+        if status:
+            params["status"] = [s.value for s in status]
+
+        data = self._get(
+            f"applications/{app_id}/stages/{stage_id}/{attempt_id}/taskList", params
+        )
+        return self._parse_model_list(data, TaskData)
+
+    def get_executors(self, app_id: str) -> List[ExecutorSummary]:
+        """
+        Get a list of all executors for an application.
+
+        Args:
+            app_id: The application ID
+
+        Returns:
+            List of ExecutorSummary objects
+        """
+        data = self._get(f"applications/{app_id}/executors")
+        return self._parse_model_list(data, ExecutorSummary)
+
+    def get_all_executors(self, app_id: str) -> List[ExecutorSummary]:
+        """
+        Get a list of all executors (active and inactive) for an application.
+
+        Args:
+            app_id: The application ID
+
+        Returns:
+            List of ExecutorSummary objects
+        """
+        data = self._get(f"applications/{app_id}/allexecutors")
+        return self._parse_model_list(data, ExecutorSummary)
+
+    def get_executor_thread_dump(
+        self, app_id: str, executor_id: str
+    ) -> List[ThreadStackTrace]:
+        """
+        Get thread dump for a specific executor.
+
+        Args:
+            app_id: The application ID
+            executor_id: The executor ID
+
+        Returns:
+            List of ThreadStackTrace objects
+        """
+        data = self._get(f"applications/{app_id}/executors/{executor_id}/threads")
+        return self._parse_model_list(data, ThreadStackTrace)
+
+    def get_task_thread_dump(
+        self, app_id: str, task_id: int, executor_id: str
+    ) -> ThreadStackTrace:
+        """
+        Get thread dump for a specific task.
+
+        Args:
+            app_id: The application ID
+            task_id: The task ID
+            executor_id: The executor ID
+
+        Returns:
+            ThreadStackTrace object
+        """
+        params = {"taskId": task_id, "executorId": executor_id}
+        data = self._get(f"applications/{app_id}/threads", params)
+        return self._parse_model(data, ThreadStackTrace)
+
+    def get_all_processes(self, app_id: str) -> List[ProcessSummary]:
+        """
+        Get a list of all processes for an application.
+
+        Args:
+            app_id: The application ID
+
+        Returns:
+            List of ProcessSummary objects
+        """
+        data = self._get(f"applications/{app_id}/allmiscellaneousprocess")
+        return self._parse_model_list(data, ProcessSummary)
+
+    def get_rdds(self, app_id: str) -> List[RDDStorageInfo]:
+        """
+        Get a list of all RDDs for an application.
+
+        Args:
+            app_id: The application ID
+
+        Returns:
+            List of RDDStorageInfo objects
+        """
+        data = self._get(f"applications/{app_id}/storage/rdd")
+        return self._parse_model_list(data, RDDStorageInfo)
+
+    def get_rdd(self, app_id: str, rdd_id: int) -> RDDStorageInfo:
+        """
+        Get information about a specific RDD.
+
+        Args:
+            app_id: The application ID
+            rdd_id: The RDD ID
+
+        Returns:
+            RDDStorageInfo object
+        """
+        data = self._get(f"applications/{app_id}/storage/rdd/{rdd_id}")
+        return self._parse_model(data, RDDStorageInfo)
+
+    def get_environment(self, app_id: str) -> ApplicationEnvironmentInfo:
+        """
+        Get environment information for an application.
+
+        Args:
+            app_id: The application ID
+
+        Returns:
+            ApplicationEnvironmentInfo object
+        """
+        data = self._get(f"applications/{app_id}/environment")
+        return self._parse_model(data, ApplicationEnvironmentInfo)
+
+    def get_metrics_prometheus(self, app_id: str) -> str:
+        """
+        Get Prometheus metrics for an application.
+
+        Args:
+            app_id: The application ID
+
+        Returns:
+            Prometheus metrics as a string
+        """
+        url = urljoin(
+            self.base_url.replace("/api/v1", "/metrics/executors"), "prometheus"
+        )
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.text
+
+    def get_sql_list(
+        self,
+        app_id: str,
+        attempt_id: Optional[str] = None,
+        details: bool = True,
+        plan_description: bool = False,
+        offset: int = 0,
+        length: int = 20,
+    ) -> List[ExecutionData]:
+        """
+        Get a list of all SQL executions for an application.
+
+        Args:
+            app_id: The application ID
+            attempt_id: Optional attempt ID
+            details: Whether to include execution details
+            plan_description: Whether to include plan description
+            offset: Pagination offset
+            length: Number of executions to return
+
+        Returns:
+            List of ExecutionData objects
+        """
+        params = {
+            "details": str(details).lower(),
+            "planDescription": str(plan_description).lower(),
+            "offset": offset,
+            "length": length,
+        }
+
+        if attempt_id:
+            endpoint = f"applications/{app_id}/{attempt_id}/sql"
+        else:
+            endpoint = f"applications/{app_id}/sql"
+
+        data = self._get(endpoint, params)
+        return [ExecutionData.from_dict(item) for item in data]
+
+    def get_sql_execution(
+        self,
+        app_id: str,
+        execution_id: int,
+        attempt_id: Optional[str] = None,
+        details: bool = True,
+        plan_description: bool = True,
+    ) -> ExecutionData:
+        """
+        Get information about a specific SQL execution.
+
+        Args:
+            app_id: The application ID
+            execution_id: The execution ID
+            attempt_id: Optional attempt ID
+            details: Whether to include execution details
+            plan_description: Whether to include plan description
+
+        Returns:
+            ExecutionData object
+        """
+        params = {
+            "details": str(details).lower(),
+            "planDescription": str(plan_description).lower(),
+        }
+
+        if attempt_id:
+            endpoint = f"applications/{app_id}/{attempt_id}/sql/{execution_id}"
+        else:
+            endpoint = f"applications/{app_id}/sql/{execution_id}"
+
+        data = self._get(endpoint, params)
+        return ExecutionData.from_dict(data)

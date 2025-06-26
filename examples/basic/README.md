@@ -1,0 +1,1 @@
+podman run -it -v $(pwd)/examples/basic:/mnt/data  -p 18080:18080 spark:3.5.5 /opt/java/openjdk/bin/java -cp '/opt/spark/conf:/opt/spark/jars/*' -Xmx1g org.apache.spark.deploy.history.HistoryServer --properties-file /mnt/data/history-server.conf
