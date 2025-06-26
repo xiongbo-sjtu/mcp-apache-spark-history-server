@@ -1,7 +1,7 @@
 
 # Spark History Server MCP Server
 
-This is a MCP server that exposes most Apache History Server REST APIs as tools. 
+This is a MCP server that exposes most Apache History Server REST APIs as tools. Apache Spark History server supports read operations only so ths tool can only do read operations.
 
 In addition to REST APIs, it has additional operations available such as getting the n slowest jobs, n slowest stages, and a summary of excutor metrics.
 
