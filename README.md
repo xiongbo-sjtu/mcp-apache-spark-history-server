@@ -1,10 +1,11 @@
 
-## install
+# Spark History Server MCP Server
 
-- install `uv` https://docs.astral.sh/uv/
-- run `uv venv`
-- Run `source .venv/bin/activate`
-- Run `uv sync`
+This is a MCP server that exposes most Apache History Server REST APIs as tools. 
+
+In addition to REST APIs, it has additional operations available such as getting the n slowest jobs, n slowest stages, and a summary of excutor metrics.
+
+This MCP server was tested with Qwen3 32B and 235B.
 
 ## Getting started
 
