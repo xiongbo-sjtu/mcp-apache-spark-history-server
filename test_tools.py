@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from tools import get_client_or_default
+from tools import get_client_or_default, get_stage, get_slowest_jobs
 from spark_client import SparkRestClient
 from datetime import datetime, timedelta
-from spark_types import JobData
+from spark_types import JobData, StageData, TaskMetricDistributions
 
 
 class TestTools(unittest.TestCase):
@@ -83,7 +83,6 @@ class TestTools(unittest.TestCase):
         mock_get_client.return_value = mock_client
 
         # Call the function
-        from tools import get_slowest_jobs
 
         result = get_slowest_jobs("app-123", n=3)
 
@@ -122,7 +121,6 @@ class TestTools(unittest.TestCase):
         mock_get_client.return_value = mock_client
 
         # Call the function with include_running=False (default)
-        from tools import get_slowest_jobs
 
         result = get_slowest_jobs("app-123", n=2)
 
@@ -162,7 +160,6 @@ class TestTools(unittest.TestCase):
         mock_get_client.return_value = mock_client
 
         # Call the function with include_running=True
-        from tools import get_slowest_jobs
 
         result = get_slowest_jobs("app-123", include_running=True, n=2)
 
@@ -193,9 +190,146 @@ class TestTools(unittest.TestCase):
         mock_get_client.return_value = mock_client
 
         # Call the function with n=3
-        from tools import get_slowest_jobs
 
         result = get_slowest_jobs("app-123", n=3)
 
         # Verify results - should return only 3 jobs
         self.assertEqual(len(result), 3)
+
+    @patch("tools.get_client_or_default")
+    def test_get_stage_with_attempt_id(self, mock_get_client):
+        """Test get_stage with a specific attempt ID"""
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_stage = MagicMock(spec=StageData)
+        mock_stage.task_metrics_distributions = None
+        # Explicitly set the attempt_id attribute on the mock
+        mock_stage.attempt_id = 0
+        mock_client.get_stage_attempt.return_value = mock_stage
+        mock_get_client.return_value = mock_client
+
+        # Call the function with attempt_id
+        from tools import get_stage
+
+        result = get_stage("app-123", stage_id=1, attempt_id=0)
+
+        # Verify results
+        self.assertEqual(result, mock_stage)
+        mock_client.get_stage_attempt.assert_called_once_with(
+            app_id="app-123",
+            stage_id=1,
+            attempt_id=0,
+            details=False,
+            with_summaries=False,
+        )
+
+    @patch("tools.get_client_or_default")
+    def test_get_stage_without_attempt_id_single_stage(self, mock_get_client):
+        """Test get_stage without attempt ID when a single stage is returned"""
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_stage = MagicMock(spec=StageData)
+        mock_stage.task_metrics_distributions = None
+        # Explicitly set the attempt_id attribute on the mock
+        mock_stage.attempt_id = 0
+        mock_client.get_stage.return_value = mock_stage
+        mock_get_client.return_value = mock_client
+
+        # Call the function without attempt_id
+        from tools import get_stage
+
+        result = get_stage("app-123", stage_id=1)
+
+        # Verify results
+        self.assertEqual(result, mock_stage)
+        mock_client.get_stage.assert_called_once_with(
+            app_id="app-123",
+            stage_id=1,
+            details=False,
+            with_summaries=False,
+        )
+
+    @patch("tools.get_client_or_default")
+    def test_get_stage_without_attempt_id_multiple_stages(self, mock_get_client):
+        """Test get_stage without attempt ID when multiple stages are returned"""
+        # Setup mock client
+        mock_client = MagicMock()
+
+        # Create mock stages with different attempt IDs
+        mock_stage1 = MagicMock(spec=StageData)
+        mock_stage1.attempt_id = 0
+        mock_stage1.task_metrics_distributions = None
+
+        mock_stage2 = MagicMock(spec=StageData)
+        mock_stage2.attempt_id = 1
+        mock_stage2.task_metrics_distributions = None
+
+        mock_client.get_stage.return_value = [mock_stage1, mock_stage2]
+        mock_get_client.return_value = mock_client
+
+        # Call the function without attempt_id
+        from tools import get_stage
+
+        result = get_stage("app-123", stage_id=1)
+
+        # Verify results - should return the stage with highest attempt_id
+        self.assertEqual(result, mock_stage2)
+        mock_client.get_stage.assert_called_once_with(
+            app_id="app-123",
+            stage_id=1,
+            details=False,
+            with_summaries=False,
+        )
+
+    @patch("tools.get_client_or_default")
+    def test_get_stage_with_summaries_missing_metrics(self, mock_get_client):
+        """Test get_stage with summaries when metrics distributions are missing"""
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_stage = MagicMock(spec=StageData)
+        # Explicitly set the attempt_id attribute on the mock
+        mock_stage.attempt_id = 0
+        # Set task_metrics_distributions to None to trigger the fetch
+        mock_stage.task_metrics_distributions = None
+
+        mock_summary = MagicMock(spec=TaskMetricDistributions)
+
+        mock_client.get_stage_attempt.return_value = mock_stage
+        mock_client.get_stage_task_summary.return_value = mock_summary
+        mock_get_client.return_value = mock_client
+
+        # Call the function with with_summaries=True
+        from tools import get_stage
+
+        result = get_stage("app-123", stage_id=1, attempt_id=0, with_summaries=True)
+
+        # Verify results
+        self.assertEqual(result, mock_stage)
+        self.assertEqual(result.task_metrics_distributions, mock_summary)
+
+        mock_client.get_stage_attempt.assert_called_once_with(
+            app_id="app-123",
+            stage_id=1,
+            attempt_id=0,
+            details=False,
+            with_summaries=True,
+        )
+
+        mock_client.get_stage_task_summary.assert_called_once_with(
+            app_id="app-123",
+            stage_id=1,
+            attempt_id=0,
+        )
+
+    @patch("tools.get_client_or_default")
+    def test_get_stage_no_stages_found(self, mock_get_client):
+        """Test get_stage when no stages are found"""
+        # Setup mock client
+        mock_client = MagicMock()
+        mock_client.get_stage.return_value = []
+        mock_get_client.return_value = mock_client
+
+        with self.assertRaises(ValueError) as context:
+            get_stage("app-123", stage_id=1)
+
+        self.assertIn("No stage found with ID 1", str(context.exception))

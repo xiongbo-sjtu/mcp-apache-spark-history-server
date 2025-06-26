@@ -1,4 +1,4 @@
-from typing import Optional, List, Union
+from typing import Optional, List
 
 from app import mcp
 from spark_types import (
@@ -143,7 +143,6 @@ def get_stages(
     spark_id: str,
     server: Optional[str] = None,
     status: Optional[list[str]] = None,
-    details: bool = False,
     with_summaries: bool = False,
 ) -> list:
     """
@@ -156,7 +155,6 @@ def get_stages(
         spark_id: The Spark application ID
         server: Optional server name to use (uses default if not specified)
         status: Optional list of stage status values to filter by
-        details: Whether to include task details in the response
         with_summaries: Whether to include summary metrics in the response
 
     Returns:
@@ -173,7 +171,6 @@ def get_stages(
     return client.get_stages(
         app_id=spark_id,
         status=stage_statuses,
-        details=details,
         with_summaries=with_summaries,
     )
 
@@ -233,41 +230,64 @@ def get_stage(
     stage_id: int,
     attempt_id: Optional[int] = None,
     server: Optional[str] = None,
-    details: bool = True,
     with_summaries: bool = False,
-) -> Union[StageData, List[StageData]]:
+) -> StageData:
     """
     Get information about a specific stage.
 
     Args:
         spark_id: The Spark application ID
         stage_id: The stage ID
-        attempt_id: Optional stage attempt ID (if not provided, returns all attempts)
+        attempt_id: Optional stage attempt ID (if not provided, returns the latest attempt)
         server: Optional server name to use (uses default if not specified)
-        details: Whether to include task details
         with_summaries: Whether to include summary metrics
 
     Returns:
-        StageData object if attempt_id is provided, otherwise a list of StageData objects
+        StageData object containing stage information
     """
     ctx = mcp.get_context()
     client = get_client_or_default(ctx, server)
 
     if attempt_id is not None:
-        return client.get_stage_attempt(
+        # Get specific attempt
+        stage_data = client.get_stage_attempt(
             app_id=spark_id,
             stage_id=stage_id,
             attempt_id=attempt_id,
-            details=details,
+            details=False,
             with_summaries=with_summaries,
         )
     else:
-        return client.get_stage(
+        # Get all attempts and use the latest one
+        stages = client.get_stage(
             app_id=spark_id,
             stage_id=stage_id,
-            details=details,
+            details=False,
             with_summaries=with_summaries,
         )
+
+        if not stages:
+            raise ValueError(f"No stage found with ID {stage_id}")
+
+        # If multiple attempts exist, get the one with the highest attempt_id
+        if isinstance(stages, list):
+            stage_data = max(stages, key=lambda s: s.attempt_id)
+        else:
+            stage_data = stages
+
+    # If summaries were requested but metrics distributions are missing, fetch them separately
+    if with_summaries and (
+        not hasattr(stage_data, "task_metrics_distributions")
+        or stage_data.task_metrics_distributions is None
+    ):
+        task_summary = client.get_stage_task_summary(
+            app_id=spark_id,
+            stage_id=stage_id,
+            attempt_id=stage_data.attempt_id,
+        )
+        stage_data.task_metrics_distributions = task_summary
+
+    return stage_data
 
 
 @mcp.tool()

@@ -213,7 +213,7 @@ class SparkRestClient:
         status: Optional[List[StageStatus]] = None,
         details: bool = False,
         with_summaries: bool = False,
-        quantiles: str = "0.0,0.25,0.5,0.75,1.0",
+        quantiles: str = "0.05, 0.25, 0.5, 0.75, 0.95",
         task_status: Optional[List[TaskStatus]] = None,
     ) -> List[StageData]:
         """
@@ -248,10 +248,10 @@ class SparkRestClient:
         self,
         app_id: str,
         stage_id: int,
-        details: bool = True,
+        details: bool = False,  # Setting this to true is NOT recommended due to the amount of data returned.
         task_status: Optional[List[TaskStatus]] = None,
-        with_summaries: bool = False,
-        quantiles: str = "0.0,0.25,0.5,0.75,1.0",
+        with_summaries: bool = True,
+        quantiles: str = "0.05, 0.25, 0.5, 0.75, 0.95",
     ) -> List[StageData]:
         """
         Get information about a specific stage.
@@ -287,7 +287,7 @@ class SparkRestClient:
         details: bool = True,
         task_status: Optional[List[TaskStatus]] = None,
         with_summaries: bool = False,
-        quantiles: str = "0.0,0.25,0.5,0.75,1.0",
+        quantiles: str = "0.05, 0.25, 0.5, 0.75, 0.95",
     ) -> StageData:
         """
         Get information about a specific stage attempt.
@@ -323,7 +323,7 @@ class SparkRestClient:
         app_id: str,
         stage_id: int,
         attempt_id: int,
-        quantiles: str = "0.05,0.25,0.5,0.75,0.95",
+        quantiles: str = "0.05, 0.25, 0.5, 0.75, 0.95",
     ) -> TaskMetricDistributions:
         """
         Get task summary metrics for a specific stage attempt.
