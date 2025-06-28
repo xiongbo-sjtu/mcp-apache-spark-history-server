@@ -1,6 +1,7 @@
 import os
-import yaml
 from typing import Dict
+
+import yaml
 from pydantic import BaseModel, Field
 
 
@@ -10,6 +11,16 @@ class AuthConfig(BaseModel):
     username: str = Field(None, alias="username")
     password: str = Field(None, alias="password")
     token: str = Field(None, alias="token")
+
+    def __init__(self, **data):
+        # Support environment variables for sensitive data
+        if not data.get("username"):
+            data["username"] = os.getenv("SPARK_USERNAME")
+        if not data.get("password"):
+            data["password"] = os.getenv("SPARK_PASSWORD")
+        if not data.get("token"):
+            data["token"] = os.getenv("SPARK_TOKEN")
+        super().__init__(**data)
 
 
 class ServerConfig(BaseModel):

@@ -1,6 +1,5 @@
 import unittest
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import MagicMock, patch
 
 from config import ServerConfig
 from spark_client import SparkRestClient
@@ -49,6 +48,7 @@ class TestSparkClient(unittest.TestCase):
             params={"status": ["COMPLETED"], "limit": 10},
             headers={"Accept": "application/json"},
             auth=None,
+            timeout=30,
         )
 
         self.assertEqual(len(apps), 1)
@@ -100,6 +100,7 @@ class TestSparkClient(unittest.TestCase):
             },
             headers={"Accept": "application/json"},
             auth=None,
+            timeout=30,
         )
 
         self.assertEqual(len(apps), 1)

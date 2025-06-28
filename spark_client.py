@@ -1,27 +1,28 @@
-import requests
-from typing import Dict, List, Optional, Any, Type, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar
 from urllib.parse import urljoin
+
+import requests
 from pydantic import BaseModel
 
+from config import ServerConfig
 from spark_types import (
-    ApplicationInfo,
     ApplicationAttemptInfo,
-    JobData,
-    ExecutorSummary,
-    StageData,
-    TaskData,
-    RDDStorageInfo,
     ApplicationEnvironmentInfo,
+    ApplicationInfo,
+    ExecutionData,
+    ExecutorSummary,
+    JobData,
+    JobExecutionStatus,
+    ProcessSummary,
+    RDDStorageInfo,
+    StageData,
+    StageStatus,
+    TaskData,
+    TaskMetricDistributions,
+    TaskStatus,
     ThreadStackTrace,
     VersionInfo,
-    JobExecutionStatus,
-    StageStatus,
-    TaskStatus,
-    ProcessSummary,
-    TaskMetricDistributions,
-    ExecutionData,
 )
-from config import ServerConfig
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -31,7 +32,7 @@ class SparkRestClient:
     Python client for the Spark REST API.
     """
 
-    def __init__(self, sever_config: ServerConfig):
+    def __init__(self, server_config: ServerConfig):
         """
         Initialize the Spark REST client.
 
@@ -40,7 +41,7 @@ class SparkRestClient:
             config_path: Path to configuration file
         """
 
-        self.config = sever_config
+        self.config = server_config
         self.base_url = self.config.url.rstrip("/") + "/api/v1"
         self.auth = None
 
@@ -67,7 +68,9 @@ class SparkRestClient:
         if self.config.auth and self.config.auth.token:
             headers["Authorization"] = f"Bearer {self.config.auth.token}"
 
-        response = requests.get(url, params=params, headers=headers, auth=self.auth)
+        response = requests.get(
+            url, params=params, headers=headers, auth=self.auth, timeout=30
+        )
         response.raise_for_status()
         return response.json()
 
@@ -504,7 +507,7 @@ class SparkRestClient:
         url = urljoin(
             self.base_url.replace("/api/v1", "/metrics/executors"), "prometheus"
         )
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         return response.text
 

@@ -3,15 +3,16 @@ import os
 import uuid
 from urllib.parse import urljoin
 
-from config import ServerConfig
 from playwright.async_api import async_playwright
 
-# very experimental html client
+from config import ServerConfig
+
+# HTML client for Spark History Server web interface
 
 
 class SparkHtmlClient:
-    def __init__(self, sever_config: ServerConfig):
-        self.config = sever_config
+    def __init__(self, server_config: ServerConfig):
+        self.config = server_config
         self.base_url = self.config.url.rstrip("/") + "/history/"
         self.auth = None
         self.browser = None
@@ -73,7 +74,6 @@ class SparkHtmlClient:
             page = await self.browser.new_page()
             await page.set_viewport_size({"width": 2560, "height": 800})
             url = urljoin(self.base_url, path)
-            print(url)
             await page.goto(url)
 
             # Wait for network to be idle
@@ -81,7 +81,13 @@ class SparkHtmlClient:
             await page.wait_for_timeout(3000)  # 3 seconds
 
             # Use provided save_path or generate a random filename
-            filename = save_path if save_path else f"/tmp/{uuid.uuid4()}.jpg"
+            import tempfile
+
+            filename = (
+                save_path
+                if save_path
+                else f"{tempfile.gettempdir()}/{uuid.uuid4()}.jpg"
+            )
 
             # Ensure directory exists
             os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
@@ -111,4 +117,5 @@ async def main():
     # print("HTML content saved to rendered_page.html")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
