@@ -49,14 +49,16 @@ graph TB
 ```bash
 git clone https://github.com/DeepDiagnostix-AI/spark-history-server-mcp.git
 cd spark-history-server-mcp
-uv sync
+uv sync --frozen
+uv run main.py
 ```
 
 ### ⚙️ Configuration
 Edit `config.yaml`:
 ```yaml
 servers:
-  default:
+  local:
+    default: true # if server name is not provided in tool calls, this Spark History Server is used
     url: "http://your-spark-history-server:18080"
     auth:  # optional
       username: "user"
@@ -66,7 +68,7 @@ servers:
 ### 🔬 Testing with MCP Inspector
 ```bash
 # Start MCP server with Inspector (opens browser automatically)
-npx @modelcontextprotocol/inspector uv run main.py
+npx @modelcontextprotocol/inspector
 ```
 
 **🌐 Test in Browser** - The MCP Inspector opens at http://localhost:6274 for interactive tool testing!
@@ -136,6 +138,9 @@ The repository includes real Spark event logs for testing:
 - `spark-bcec39f6201b42b9925124595baad260` - ✅ Successful ETL job
 - `spark-110be3a8424d4a2789cb88134418217b` - 🔄 Data processing job
 - `spark-cc4d115f011443d787f03a71a476a745` - 📈 Multi-stage analytics job
+
+They are available in the [`examples/basic/events`](examples/basic/events) directory.
+The [`start_local_spark_history.sh`](start_local_spark_history.sh) script automatically makes them available for local testing.
 
 📖 **Complete testing guide**: **[TESTING.md](TESTING.md)**
 

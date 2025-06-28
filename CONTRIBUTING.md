@@ -20,7 +20,7 @@ cd spark-history-server-mcp
 
 2. **📦 Install dependencies**
 ```bash
-uv sync --group dev
+uv sync --group dev --frozen
 ```
 
 3. **🔧 Install pre-commit hooks**
