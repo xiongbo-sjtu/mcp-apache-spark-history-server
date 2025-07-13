@@ -225,6 +225,7 @@ SHS_MCP_ADDRESS=0.0.0.0
 | **[Amazon Q CLI](examples/integrations/amazon-q-cli/)** | STDIO | Command-line automation |
 | **[LlamaIndex](examples/integrations/llamaindex.md)** | HTTP | Knowledge systems, RAG |
 | **[LangGraph](examples/integrations/langgraph.md)** | HTTP | Multi-agent workflows |
+| **[Strands Agents](examples/integrations/strands-agents/)** | HTTP | Multi-agent workflows |
 
 ## 🎯 Example Use Cases
 
