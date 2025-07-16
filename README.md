@@ -108,7 +108,7 @@ mcp:
 
 ## 🛠️ Available Tools
 
-> **⚠️ Disclaimer**: These tools are subject to change as we scale and improve the performance of the MCP server.
+> **Note**: These tools are subject to change as we scale and improve the performance of the MCP server.
 
 The MCP server provides **17 specialized tools** organized by analysis patterns. LLMs can intelligently select and combine these tools based on user queries:
 
@@ -178,6 +178,15 @@ The MCP server provides **17 specialized tools** organized by analysis patterns.
 - *"Show me resource usage over time"* → `get_resource_usage_timeline` + `get_executor_summary`
 - *"Find my slowest SQL queries"* → `get_slowest_sql_queries` + `compare_sql_execution_plans`
 
+## 📔 AWS Integration Guides
+
+If you are an existing AWS user looking to analyze your Spark Applications, we provide detailed setup guides for:
+
+- **[AWS Glue Users](examples/aws/glue/README.md)** - Connect to Glue Spark History Server
+- **[Amazon EMR Users](examples/aws/emr/README.md)** - Use EMR Persistent UI for Spark analysis
+
+These guides provide step-by-step instructions for setting up the Spark History Server MCP with your AWS services.
+
 ## 🚀 Production Deployment
 
 Deploy using Kubernetes with Helm:
@@ -215,14 +224,14 @@ servers:
 💁 User Query: "Can you get application <app_id> using production server?"
 
 🤖 AI Tool Request:
-```
+```json
 {
   "spark_id": "<app_id>",
   "server": "production"
 }
 ```
 🤖 AI Tool Response:
-```
+```json
 {
   "id": "<app_id>>",
   "name": "app_name",
@@ -298,89 +307,6 @@ SHS_MCP_ADDRESS=0.0.0.0
 ✅ Compare execution times and resource usage
 ✅ Identify performance deltas
 ✅ Highlight configuration differences
-```
-
-## 📔 Spark History Server Setup
-
-### Setting up Native Spark History Server with MCP
-
-Prereqs
-- 🐳 [Docker](https://docs.docker.com/desktop/setup/install/mac-install/) must be installed and running
-
-Steps
-- Run `task start-spark`
-
-*Optional: Specify a different Spark version using the `spark_version` parameter:*
-```bash
-task start-spark spark_version=3.5.2  # Use Spark 3.5.2 instead of default 3.5.5
-```
-*Although Spark UI is mostly backwards compatible, it is best to use the same Spark History Server version as the version of your Spark application that you are investigating.*
-
-Setup Issues
-```bash
-# If you get "Docker not running" error:
-./start_local_spark_history.sh --dry-run  # Check prerequisites
-
-# If you get "No containers to stop" warning:
-# This is normal - just means no previous containers are running
-
-# To get help with script options:
-./start_local_spark_history.sh --help
-```
-
-### Setting up AWS Glue Spark History Server with MCP
-
-There are two documented methods of setting up Spark history server to Glue
-
-#### Option 1: Launching the Spark history server and viewing the Spark UI using AWS CloudFormation
-
-[Public Documentation](https://docs.aws.amazon.com/glue/latest/dg/monitor-spark-ui-history.html#monitor-spark-ui-history-cfn)
-
-Prereqs
-- Ensure you follow the public documentation and setup a Spark Web UI
-- Identify the SparkUiPrivateUrl or SparkUiPublicUrl and ensure you can open it in the web browser
-
-Steps
-- Open [config.yaml](config.yaml) and add the Web UI URL to your server
-``` example
-glue_ec2:
-  url: "<SparkUiUrl>:<port>"
-  verify_ssl: true
-  auth:
-    username: "staging_user"
-    password: "your_password"
-    token: "staging_token"
-```
-
-Setup Issues
-```bash
-# If you get "CERTIFICATE_VERIFY_FAILED" error
-set verify_ssl: false
-```
-
-⚠️ **WARNING**: If verify_ssl is set to False, SSL certificate verification will be disabled.
-  This is insecure and should only be used in development environments
-
-#### Option 2: Launching the Spark history server and viewing the Spark UI using Docker
-
-[Public Documentation](https://docs.aws.amazon.com/glue/latest/dg/monitor-spark-ui-history.html#monitor-spark-ui-history-local)
-
-Prereqs
-- 🐳 [Docker](https://docs.docker.com/desktop/setup/install/mac-install/) must be installed and running
-
-Steps:
-- Follow steps in public doc to get Docker running http://localhost:18080 in your browser
-- Ensure [config.yaml](config.yaml) local server has correct url:
-```
-local:
-    default: true  # if server name is not provided in tool calls, this Spark History Server is used
-    url: "http://localhost:18080"
-    verify_ssl: true
-    # Optional authentication (can also use environment variables)
-    # auth:
-    #   username: "your_username"  # or use SHS_SPARK_USERNAME env var
-    #   password: "your_password"  # or use SHS_SPARK_PASSWORD env var
-    #   token: "your_token"       # or use SHS_SPARK_TOKEN env var
 ```
 
 ## 🤝 Contributing
