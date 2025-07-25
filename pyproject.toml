@@ -1,6 +1,6 @@
 [project]
 name = "mcp-apache-spark-history-server"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Model Context Protocol (MCP) server for Apache Spark History Server with job comparison and analytics"
 readme = "README.md"
 authors = [
@@ -27,14 +27,23 @@ dependencies = [
     "boto3~=1.34",
 ]
 
-# Development dependencies moved to [dependency-groups] section below
-
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spark_history_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src"
+]
+
+[tool.hatch.version] # Get version from tag
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+version_scheme = "no-guess-dev"
 
 [project.scripts]
 spark-mcp = "spark_history_mcp.core.main:main"
@@ -84,3 +93,10 @@ dev = [
     "pre-commit~=3.0",
     "pytest-asyncio~=1.0",
 ]
+
+
+[[tool.uv.index]]
+name = "pypi-test"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true

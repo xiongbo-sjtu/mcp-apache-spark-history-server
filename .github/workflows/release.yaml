@@ -2,17 +2,16 @@ name: release
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
+    tags: [ 'v[0-9]+.[0-9]+.[0-9]+' ]
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment: deploy
     permissions:
       contents: read
       packages: write
+      id-token: write # required. https://docs.pypi.org/trusted-publishers/using-a-publisher/
 
     steps:
       - name: Checkout code
@@ -46,3 +45,15 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e92bafb6253dcd438e0484186d7669ea7a8ca1cc #6.4.3
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPi
+        run: uv publish --index pypi --trusted-publishing always

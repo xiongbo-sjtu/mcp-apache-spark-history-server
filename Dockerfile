@@ -10,9 +10,12 @@ ENV UV_CACHE_DIR=/app/.cache
 
 WORKDIR /app
 
+RUN apt update && apt install git -y
+
 # Just in case for future external caching mechanisms
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=.git,target=.git \
     uv sync --frozen --no-install-project --no-dev --no-editable
 
 COPY . /app
