@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, Type, TypeVar
 from urllib.parse import urljoin
 
+import os
 import requests
 from pydantic import BaseModel
 
@@ -43,6 +44,12 @@ class SparkRestClient:
         self.base_url = self.config.url.rstrip("/") + "/api/v1"
         self.auth = None
         self.session = None
+        self.use_proxy = os.getenv('USE_PROXY', False),
+        self.proxies = self.use_proxy and {
+            'http': 'socks5h://localhost:8157',
+            'https': 'socks5h://localhost:8157'
+        } or None
+        self.attempt_id = os.getenv('ATTEMPT_ID') or None
 
         # Determine whether to verify SSL certificates
         # Default to True, but if verify_ssl is explicitly set to False, use that value
@@ -74,6 +81,18 @@ class SparkRestClient:
         # Use the verify_ssl setting for HTTPS requests
         verify = self.verify_ssl
 
+        # If URL needs attempt ID and env var is set
+        if '/applications/' in url and self.attempt_id:
+            if not '/attempts/' in url and not '/attempt/' in url:
+                # Match everything after /applications/app_id/
+                import re
+                pattern = r'(.*?/applications/[^/]+/)(.+)'
+                match = re.search(pattern, url)
+                if match:
+                    prefix = match.group(1)  # /applications/application_1753825693853_1003/
+                    suffix = match.group(2)  # allexecutors or other endpoints
+                    url = f"{prefix}{self.attempt_id}/{suffix}"
+
         # Use the session if available, otherwise use requests directly
         if self.session:
             # Add headers to the session
@@ -85,6 +104,7 @@ class SparkRestClient:
                 params=params,
                 timeout=30,
                 verify=verify,
+                proxies=self.proxies,
             )
         else:
             response = requests.get(
@@ -94,6 +114,7 @@ class SparkRestClient:
                 auth=self.auth,
                 timeout=30,
                 verify=verify,
+                proxies=self.proxies,
             )
 
         response.raise_for_status()
@@ -534,9 +555,9 @@ class SparkRestClient:
         )
 
         if self.session:
-            response = self.session.get(url, timeout=30)
+            response = self.session.get(url, timeout=30, proxies=self.proxies)
         else:
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=30, proxies=self.proxies)
 
         response.raise_for_status()
         return response.text
